@@ -336,7 +336,7 @@ class td:
 	
 	################################################################################################
 
-
+	"""
 	# Visualization of the time distance plot cahnging (not necessary)
 	def cbar_slider(self):
 		
@@ -368,7 +368,7 @@ class td:
 		smax.on_changed(update)
 		
 		plt.show()
-	
+	"""
 	################################################################################################
 
 
@@ -391,6 +391,7 @@ if __name__ == "__main__":
 	#testing = image.test(rows=3,columns=3)
 	
 	# Just for change the visualization
+	# Uncomment cbar_slider function in td class
 	#colorbar = image.cbar_slider()
 	
 	# Slider across the angles and pixels
