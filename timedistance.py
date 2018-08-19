@@ -431,7 +431,7 @@ if __name__ == "__main__":
 
 	# Paths where the files are located
 
-	savfile = "HMIDoppler.difference_coord.sav"
+	# savfile = "HMIDoppler.difference_coord.sav"
 	savfile = None
 	
 	"""
@@ -441,19 +441,19 @@ if __name__ == "__main__":
 			
 	"""
 	
-	flare = "HMIDoppler.difference.fits"
+	flare = "Examples/HMIDoppler.difference.fits"
 
 	# Values (parameters) which are set by default
-	image = td(flare,savfile=savfile,rad0=15,path=path,radius=140) 
+	image = td(flare, x0=148, y0=140, theta0=192, theta1=260, savfile=savfile,rad0=0,radius=140) 
 	
 	# Plot the td image
-	final = image.tdplot()
+	final = image.tdplot(save=None)
 
 	# Test to make many plots around the given center (x0, y0)
-	testing = image.test(rows=3,columns=3)
+	#testing = image.test(rows=3,columns=3)
 	
 	# Just for change the visualization
-	colorbar = image.cbar_slider()
+	#colorbar = image.cbar_slider()
 	
 	# Slider across the angles and pixels
 	slide = image.slider()
