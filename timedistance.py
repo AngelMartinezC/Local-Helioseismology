@@ -5,9 +5,9 @@
 
 	It is necessary to have the location x0 and y0 of the suspected sunquake,
 	as well as two angles (in degrees) in which it is located.
-	Important to have the .sav file to make possible the distribution of times
-	and distance, otherwise it will plot only the time in minutes (from 0 to 120)
-	and the distance in pixels (in progress)
+	If a .sav file exists, it is possible to make the distribution of times
+	and distance automatically, otherwise it will plot only the time 
+	(in every 45 seconds) and the distance in pixels
 	
 	Package polarTransform is needed. This package can be downloaded from 
 		https://github.com/addisonElliott/polarTransform
@@ -17,7 +17,7 @@
 	Installing process is detailed on the page
 	
 	Date created: July 10 2018
-    Date last modified: July 14 2018
+	Date last modified: July 14 2018
 	
 """
 
@@ -42,12 +42,12 @@ class cubo:
 		
 		if isinstance(array,(str)):
 			cube = fits.getdata(array,0)
-			if savfile is None:
-				head = sp.readsav(array[:-5]+"_coord.sav")
-			else:
+			if savfile:
 				head = sp.readsav(savfile)
-			header = head.aiatimes
-			return cube, header
+				header = head.aiatimes
+				return cube, header
+			else:
+				return cube, None
 		elif isinstance(array,(int,float)):
 			return "Not a valid array"
 		else: 
@@ -85,18 +85,20 @@ class td:
 	
 	def values(self):
 		
-		headi = cubo().getdata(self.array,self.sav)
-		head = headi[1]
-		frame = int(len(head)/2)
-		datef = str(head[frame][0:10])
-		date = datef[2:12]
-		d = datetime.strptime(date, '%Y-%m-%d')
-		data = d.strftime(r"%B %d$^{\mathrm{th}}$, %Y")
-		value = []
-		for i in range(len(head)):
-			value.append(head[i][11:16].decode("utf-8")) 
-		return data, value
-
+		if self.sav:
+			headi = cubo().getdata(self.array,self.sav)
+			head = headi[1]
+			frame = int(len(head)/2)
+			datef = str(head[frame][0:10])
+			date = datef[2:12]
+			d = datetime.strptime(date, '%Y-%m-%d')
+			data = d.strftime(r"%B %d$^{\mathrm{th}}$, %Y")
+			value = []
+			for i in range(len(head)):
+				value.append(head[i][11:16].decode("utf-8")) 
+			return data, value
+		else: 
+			pass
 
 	################################################################################################
 
@@ -163,30 +165,39 @@ class td:
 		   "save" is selected
 		"""
 		
-		# Call the function which has information of the flare
-		main = self.values()
+		if self.sav:
+			
+			# Call the function which has information of the flare
+			main = self.values()
 
-		# Labels for x range
-		xdiv = self.xticks
-		xrangex = np.linspace(0,len(image_td[0]),xdiv)
-		x2Mm1 = rad*695.5/1884 # Rsun[Mm]=695.5 & Rsun[pixels]=1884
-		x2Mm0 = self.rad0*695.5/1884
-		xlabel = np.linspace(x2Mm0,x2Mm1,xdiv,dtype=int)
-		xlabel = list(map(str,xlabel))
+			# Labels for x range
+			xdiv = self.xticks
+			xrangex = np.linspace(0,len(image_td[0]),xdiv)
+			x2Mm1 = rad*695.5/1884 # Rsun[Mm]=695.5 & Rsun[pixels]=1884
+			x2Mm0 = self.rad0*695.5/1884
+			xlabel = np.linspace(x2Mm0,x2Mm1,xdiv,dtype=int)
+			xlabel = list(map(str,xlabel))
 
-		# Labels for y range
-		ydiv = self.yticks
-		yrange = np.linspace(0,len(image_td)-1,ydiv)
-		ysec = np.array(yrange,dtype=int)
-		ylabel = [main[1][i] for i in ysec]
-
-		# Image of the variables with all labels defined
-		plt.xlabel("Distance (Mm)")
-		plt.ylabel("Time [UT]")
-		plt.title(main[0])
+			# Labels for y range
+			ydiv = self.yticks
+			yrange = np.linspace(0,len(image_td)-1,ydiv)
+			ysec = np.array(yrange,dtype=int)
+			ylabel = [main[1][i] for i in ysec]
+			
+			plt.title(main[0])
+			plt.xticks(xrangex,xlabel)
+			plt.yticks(yrange,ylabel)
+			plt.xlabel("Distance (Mm)")
+			plt.ylabel("Time [UT]")
+			# Image of the variables with all labels defined
+	
+		else:
+			plt.xlabel("Distance [pixels]")
+			plt.ylabel("Time [45 seconds]")
+		
 		plt.imshow(image_td,origin='lower',cmap='Greys_r',interpolation = 'spline36')
-		plt.xticks(xrangex,xlabel)
-		plt.yticks(yrange,ylabel)
+		
+		
 		
 		if self.colorbar == None:
 			plt.colorbar(label='Velocity (m/s)')
@@ -388,6 +399,9 @@ if __name__ == "__main__":
 	# Plot the td image
 	final = image.tdplot()
 	
+	###plt.imshow(final)
+	###plt.show()
+	
 	# Test to make many plots around the given center (x0, y0)
 	#testing = image.test(rows=3,columns=3)
 	
@@ -396,5 +410,5 @@ if __name__ == "__main__":
 	#colorbar = image.cbar_slider()
 	
 	# Slider across the angles and pixels
-	slide = image.slider()
+	# slide = image.slider()
 
