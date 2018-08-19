@@ -17,9 +17,10 @@
 	Installing process is detailed on the page
 	
 	Date created: July 10 2018
-	Date last modified: July 14 2018
+	Date last modified: August 19 2018
 	
 """
+
 
 from __future__ import print_function
 from __future__ import division
@@ -33,6 +34,7 @@ import time
 import polarTransform
 from datetime import datetime
 import matplotlib.patches as mpatches
+
 
 
 
@@ -52,6 +54,7 @@ class cubo:
 			return "Not a valid array"
 		else: 
 			return NotImplemented
+
 
 
 
@@ -82,6 +85,8 @@ class td:
 	
 	
 	# Obtain the information of the header as a readable file
+	# If the sav file is not given, the output labels of the tdplot graph
+	# will be time in seconds and distance in pixels
 	
 	def values(self):
 		
@@ -117,11 +122,12 @@ class td:
 		cube = cubo().getdata(self.array,self.sav)
 		s = time.time()
 		
-		# Convert to radians
+		# Convert the angles to radians
 		t0 = self.theta0*np.pi/180
 		t1 = self.theta1*np.pi/180
 		
 		# To ensure the minimum radius in the plot
+		# This is to set finalRadius in converting to polar coordinates
 		if self.radius == None:
 			mx = cube[0][0].shape[0]/2
 			my = cube[0][0].shape[1]/2
@@ -242,10 +248,41 @@ class td:
 		else:
 			cartesianImage = ptSettings.convertToCartesianImage(polarImage)
 			return cartesianImage
-			
+		
+		
+		# At the end the function returns teh array of teh time-distance plot
 
 		return image_td
 	
+	
+	
+	################################################################################################
+	
+	"""
+		The next functions ar not required to show the td plot.
+		
+		Functions:
+		----------
+		
+		
+		-- test: --
+		
+			Given the number of columns and rows, it plot as many time-distance plots as are in 
+			columns*rows. 
+			
+			
+		-- slider: --
+		
+			Useful function to slide between pixels and angles without need to compile by hand new 
+			values of pixels and angles.
+			
+			
+		-- cbar_slider: --
+				
+			To handle color contrast (min and max of colorbar)
+		
+	"""
+
 	################################################################################################
 
 
@@ -347,7 +384,7 @@ class td:
 	
 	################################################################################################
 
-	"""
+	
 	# Visualization of the time distance plot cahnging (not necessary)
 	def cbar_slider(self):
 		
@@ -379,36 +416,47 @@ class td:
 		smax.on_changed(update)
 		
 		plt.show()
-	"""
+	
+	
+		
+	################################################################################################
+	
+	### ----- end of td class
+	
 	################################################################################################
 
-# testing branch
+
+
 
 
 if __name__ == "__main__":
 
 	# Paths where the files are located
-	# Menawhile this path will be set
-	path = "/home/angel/IDLWorkspace/Python/Codes/Examples/"
-	savfile = path+"HMIDoppler.difference_coord.sav"
-	flare = path+"HMIDoppler.difference.fits"
+
+	savfile = "HMIDoppler.difference_coord.sav"
+	savfile = None
+	
+	"""
+		The value None is because of the limit to upload files in GitHub
+		For more information read 
+			https://help.github.com/articles/working-with-large-files/
+			
+	"""
+	
+	flare = "HMIDoppler.difference.fits"
 
 	# Values (parameters) which are set by default
 	image = td(flare,savfile=savfile,rad0=15,path=path,radius=140) 
 	
 	# Plot the td image
 	final = image.tdplot()
-	
-	###plt.imshow(final)
-	###plt.show()
-	
+
 	# Test to make many plots around the given center (x0, y0)
-	#testing = image.test(rows=3,columns=3)
+	testing = image.test(rows=3,columns=3)
 	
 	# Just for change the visualization
-	# Uncomment cbar_slider function in td class
-	#colorbar = image.cbar_slider()
+	colorbar = image.cbar_slider()
 	
 	# Slider across the angles and pixels
-	# slide = image.slider()
+	slide = image.slider()
 
