@@ -17,7 +17,7 @@
 	Installing process is detailed on the page
 	
 	Date created: July 10 2018
-        Date last modified: July 14 2018
+	Date last modified: July 14 2018
 	
 """
 
@@ -371,10 +371,6 @@ class td:
 	"""
 	################################################################################################
 
-
-
-
-# This is a testing comment, 
 
 if __name__ == "__main__":
 
