@@ -5,9 +5,9 @@
 
 	It is necessary to have the location x0 and y0 of the suspected sunquake,
 	as well as two angles (in degrees) in which it is located.
-	Important to have the .sav file to make possible the distribution of times
-	and distance, otherwise it will plot only the time in minutes (from 0 to 120)
-	and the distance in pixels (in progress)
+	If a .sav file exists, it is possible to make the distribution of times
+	and distance automatically, otherwise it will plot only the time 
+	(in every 45 seconds) and the distance in pixels
 	
 	Package polarTransform is needed. This package can be downloaded from 
 		https://github.com/addisonElliott/polarTransform
@@ -17,9 +17,11 @@
 	Installing process is detailed on the page
 	
 	Date created: July 10 2018
-	Date last modified: July 14 2018
+	Date last modified: August 19 2018
+
 	
 """
+
 
 from __future__ import print_function
 from __future__ import division
@@ -36,22 +38,24 @@ import matplotlib.patches as mpatches
 
 
 
+
 class cubo:
 	
 	def getdata(self,array,savfile):
 		
 		if isinstance(array,(str)):
 			cube = fits.getdata(array,0)
-			if savfile is None:
-				head = sp.readsav(array[:-5]+"_coord.sav")
-			else:
+			if savfile:
 				head = sp.readsav(savfile)
-			header = head.aiatimes
-			return cube, header
+				header = head.aiatimes
+				return cube, header
+			else:
+				return cube, None
 		elif isinstance(array,(int,float)):
 			return "Not a valid array"
 		else: 
 			return NotImplemented
+
 
 
 
@@ -82,21 +86,25 @@ class td:
 	
 	
 	# Obtain the information of the header as a readable file
+	# If the sav file is not given, the output labels of the tdplot graph
+	# will be time in seconds and distance in pixels
 	
 	def values(self):
 		
-		headi = cubo().getdata(self.array,self.sav)
-		head = headi[1]
-		frame = int(len(head)/2)
-		datef = str(head[frame][0:10])
-		date = datef[2:12]
-		d = datetime.strptime(date, '%Y-%m-%d')
-		data = d.strftime(r"%B %d$^{\mathrm{th}}$, %Y")
-		value = []
-		for i in range(len(head)):
-			value.append(head[i][11:16].decode("utf-8")) 
-		return data, value
-
+		if self.sav:
+			headi = cubo().getdata(self.array,self.sav)
+			head = headi[1]
+			frame = int(len(head)/2)
+			datef = str(head[frame][0:10])
+			date = datef[2:12]
+			d = datetime.strptime(date, '%Y-%m-%d')
+			data = d.strftime(r"%B %d$^{\mathrm{th}}$, %Y")
+			value = []
+			for i in range(len(head)):
+				value.append(head[i][11:16].decode("utf-8")) 
+			return data, value
+		else: 
+			pass
 
 	################################################################################################
 
@@ -115,11 +123,12 @@ class td:
 		cube = cubo().getdata(self.array,self.sav)
 		s = time.time()
 		
-		# Convert to radians
+		# Convert the angles to radians
 		t0 = self.theta0*np.pi/180
 		t1 = self.theta1*np.pi/180
 		
 		# To ensure the minimum radius in the plot
+		# This is to set finalRadius in converting to polar coordinates
 		if self.radius == None:
 			mx = cube[0][0].shape[0]/2
 			my = cube[0][0].shape[1]/2
@@ -163,30 +172,39 @@ class td:
 		   "save" is selected
 		"""
 		
-		# Call the function which has information of the flare
-		main = self.values()
+		if self.sav:
+			
+			# Call the function which has information of the flare
+			main = self.values()
 
-		# Labels for x range
-		xdiv = self.xticks
-		xrangex = np.linspace(0,len(image_td[0]),xdiv)
-		x2Mm1 = rad*695.5/1884 # Rsun[Mm]=695.5 & Rsun[pixels]=1884
-		x2Mm0 = self.rad0*695.5/1884
-		xlabel = np.linspace(x2Mm0,x2Mm1,xdiv,dtype=int)
-		xlabel = list(map(str,xlabel))
+			# Labels for x range
+			xdiv = self.xticks
+			xrangex = np.linspace(0,len(image_td[0]),xdiv)
+			x2Mm1 = rad*695.5/1884 # Rsun[Mm]=695.5 & Rsun[pixels]=1884
+			x2Mm0 = self.rad0*695.5/1884
+			xlabel = np.linspace(x2Mm0,x2Mm1,xdiv,dtype=int)
+			xlabel = list(map(str,xlabel))
 
-		# Labels for y range
-		ydiv = self.yticks
-		yrange = np.linspace(0,len(image_td)-1,ydiv)
-		ysec = np.array(yrange,dtype=int)
-		ylabel = [main[1][i] for i in ysec]
-
-		# Image of the variables with all labels defined
-		plt.xlabel("Distance (Mm)")
-		plt.ylabel("Time [UT]")
-		plt.title(main[0])
+			# Labels for y range
+			ydiv = self.yticks
+			yrange = np.linspace(0,len(image_td)-1,ydiv)
+			ysec = np.array(yrange,dtype=int)
+			ylabel = [main[1][i] for i in ysec]
+			
+			plt.title(main[0])
+			plt.xticks(xrangex,xlabel)
+			plt.yticks(yrange,ylabel)
+			plt.xlabel("Distance (Mm)")
+			plt.ylabel("Time [UT]")
+			# Image of the variables with all labels defined
+	
+		else:
+			plt.xlabel("Distance [pixels]")
+			plt.ylabel("Time [45 seconds]")
+		
 		plt.imshow(image_td,origin='lower',cmap='Greys_r',interpolation = 'spline36')
-		plt.xticks(xrangex,xlabel)
-		plt.yticks(yrange,ylabel)
+		
+		
 		
 		if self.colorbar == None:
 			plt.colorbar(label='Velocity (m/s)')
@@ -231,10 +249,41 @@ class td:
 		else:
 			cartesianImage = ptSettings.convertToCartesianImage(polarImage)
 			return cartesianImage
-			
+		
+		
+		# At the end the function returns teh array of teh time-distance plot
 
 		return image_td
 	
+	
+	
+	################################################################################################
+	
+	"""
+		The next functions ar not required to show the td plot.
+		
+		Functions:
+		----------
+		
+		
+		-- test: --
+		
+			Given the number of columns and rows, it plot as many time-distance plots as are in 
+			columns*rows. 
+			
+			
+		-- slider: --
+		
+			Useful function to slide between pixels and angles without need to compile by hand new 
+			values of pixels and angles.
+			
+			
+		-- cbar_slider: --
+				
+			To handle color contrast (min and max of colorbar)
+		
+	"""
+
 	################################################################################################
 
 
@@ -336,7 +385,7 @@ class td:
 	
 	################################################################################################
 
-	"""
+	
 	# Visualization of the time distance plot cahnging (not necessary)
 	def cbar_slider(self):
 		
@@ -368,30 +417,43 @@ class td:
 		smax.on_changed(update)
 		
 		plt.show()
-	"""
+	
+	
+		
+	################################################################################################
+	
+	### ----- end of td class
+	
 	################################################################################################
 
 
 if __name__ == "__main__":
 
 	# Paths where the files are located
-	# Menawhile this path will be set
-	path = "/home/angel/IDLWorkspace/Python/Codes/Examples/"
-	savfile = path+"HMIDoppler.difference_coord.sav"
-	flare = path+"HMIDoppler.difference.fits"
+
+	savfile = "HMIDoppler.difference_coord.sav"
+	savfile = None
+	
+	"""
+		The value None is because of the limit to upload files in GitHub
+		For more information read 
+			https://help.github.com/articles/working-with-large-files/
+			
+	"""
+	
+	flare = "HMIDoppler.difference.fits"
 
 	# Values (parameters) which are set by default
 	image = td(flare,savfile=savfile,rad0=15,path=path,radius=140) 
 	
 	# Plot the td image
 	final = image.tdplot()
-	
+
 	# Test to make many plots around the given center (x0, y0)
-	#testing = image.test(rows=3,columns=3)
+	testing = image.test(rows=3,columns=3)
 	
 	# Just for change the visualization
-	# Uncomment cbar_slider function in td class
-	#colorbar = image.cbar_slider()
+	colorbar = image.cbar_slider()
 	
 	# Slider across the angles and pixels
 	slide = image.slider()
