@@ -60,7 +60,7 @@ class td:
 	rsun_m = 695.5e6
 	rsun_pix = 1884 # Value for HMI
 	
-	def __init__(self,array, x0=113, y0=91, theta0=225, theta1=270, savfile=None, path=None,\
+	def __init__(self,array, x0=148, y0=140, theta0=192, theta1=260, savfile=None, path=None,\
 	   radius=None, rad0=0, images=None, cartesian=None, xticks=5, yticks=6):
 	
 		self.array = array
@@ -377,7 +377,8 @@ class td:
 if __name__ == "__main__":
 
 	# Paths where the files are located
-	path = ""
+	# Menawhile this path will be set
+	path = "/home/angel/IDLWorkspace/Python/Codes/Examples/"
 	savfile = path+"HMIDoppler.difference_coord.sav"
 	flare = path+"HMIDoppler.difference.fits"
 
