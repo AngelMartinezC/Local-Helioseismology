@@ -431,16 +431,7 @@ if __name__ == "__main__":
 
 	# Paths where the files are located
 
-	# savfile = "HMIDoppler.difference_coord.sav"
-	savfile = None
-	
-	"""
-		The value None is because of the limit to upload files in GitHub
-		For more information read 
-			https://help.github.com/articles/working-with-large-files/
-			
-	"""
-	
+	savfile = "Examples/HMIDoppler.difference_coord.sav"
 	flare = "Examples/HMIDoppler.difference.fits"
 
 	# Values (parameters) which are set by default
