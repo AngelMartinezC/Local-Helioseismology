@@ -7,3 +7,7 @@
 
 
 ![Sunquake Image](Images/sunquake.png)
+
+## Theory of stellar pulsation
+
+$c^2=\gamma*\frac{P}{\rho}$
