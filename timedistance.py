@@ -245,7 +245,7 @@ class td:
 
 		# Return a cartesian version of the set 
 		if self.cartesian == None:
-			return image_td
+			pass
 		else:
 			cartesianImage = ptSettings.convertToCartesianImage(polarImage)
 			return cartesianImage
@@ -431,8 +431,8 @@ if __name__ == "__main__":
 
 	# Paths where the files are located
 
-	savfile = "Examples/HMIDoppler.difference_coord.sav"
-	flare = "Examples/HMIDoppler.difference.fits"
+	savfile = "Data/HMIDoppler.difference_coord.sav"
+	flare = "Data/HMIDoppler.difference.fits"
 
 	# Values (parameters) which are set by default
 	image = td(flare, x0=148, y0=140, theta0=192, theta1=260, savfile=savfile,rad0=0,radius=140) 
