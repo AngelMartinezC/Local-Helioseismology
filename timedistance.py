@@ -357,8 +357,8 @@ class td:
 		slider_ra = Slider(axrd,"radio",0,20,valinit = self.rad0)
 		slider_t1 = Slider(axt1,r'$\theta _1(^\circ)$',0, 359, valinit = self.theta1)
 		slider_t0 = Slider(axt0,r'$\theta _0(^\circ)$',0, 359, valinit = self.theta0)
-		slider_x0 = Slider(axy0,r'x',0,200, valinit = self.x0) 
-		slider_y0 = Slider(axx0,r'y',0,200, valinit = self.y0)
+		slider_x0 = Slider(axy0,r'x',0,400, valinit = self.x0) 
+		slider_y0 = Slider(axx0,r'y',0,400, valinit = self.y0)
 
 		plt.axes([0.25, 0.25, 0.6, 0.6])
 
