@@ -111,7 +111,7 @@ class td:
 	
 	# Function wich makes the time-distance plot
 	
-	def tdplot(self,colorbar=None, plot=None, save=None, noprint=None, notime=None):
+	def tdplot(self,colorbar=None, plot=None, save=False, noprint=None, notime=None):
 		
 		self.colorbar = colorbar
 		self.plot = plot
@@ -217,9 +217,7 @@ class td:
 		"""
 		
 		# Save the graph
-		if self.save == None: 
-			pass
-		else:
+		if self.save == True: 
 			if self.path == None:
 				plt.savefig("Sunquake_"+str(self.x0)+"_"+str(self.y0)+"_"+ \
 				str(self.theta0)+"_"+str(self.theta1)+"_"+str(rad)+".png",format="png",dpi=450)
@@ -230,6 +228,8 @@ class td:
 				str(self.theta0)+"_"+str(self.theta1)+"_"+str(rad)+".png",format="png",dpi=450)
 				plt.savefig(self.path+"Sunquake_"+str(self.x0)+"_"+str(self.y0)+"_"+ \
 				str(self.theta0)+"_"+str(self.theta1)+"_"+str(rad)+".eps",format="eps",dpi=450)
+		else:
+			pass
 		
 		# Show the time spent making the graph
 		if self.notime == None:
@@ -251,7 +251,7 @@ class td:
 			return cartesianImage
 		
 		
-		# At the end the function returns teh array of teh time-distance plot
+		# At the end the function returns teh array of the time-distance plot
 
 		return image_td
 	
@@ -330,6 +330,7 @@ class td:
 		from matplotlib.widgets import Slider, Button, RadioButtons
 
 		# Image configuration and first call
+		#fig = plt.figure(figsize=(38, 5))
 		fig, ax = plt.subplots()
 		fig.subplots_adjust(bottom=0.15)
 		
@@ -341,6 +342,8 @@ class td:
 		
 		im = data(self.x0,self.y0,self.theta0,self.theta1)
 		image = ax.imshow(im, cmap='Greys_r', interpolation='spline36',origin='lower')
+		
+		#plt.axes.Axes.set_xscale(1, 'linear')
 
 		# Remove actual image to not be shown
 		plt.show(block=False)
@@ -438,7 +441,7 @@ if __name__ == "__main__":
 	image = td(flare, x0=148, y0=140, theta0=192, theta1=260, savfile=savfile,rad0=0,radius=140) 
 	
 	# Plot the td image
-	final = image.tdplot(save=None)
+	final = image.tdplot(save=False)
 
 	# Test to make many plots around the given center (x0, y0)
 	#testing = image.test(rows=3,columns=3)
