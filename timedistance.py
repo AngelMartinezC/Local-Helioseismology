@@ -32,7 +32,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io as sp
 import time
-import polarTransform
+from polarTransform import convertToPolarImage as POLIMA
 from datetime import datetime
 import matplotlib.patches as mpatches
 
@@ -154,10 +154,10 @@ class td:
 			image = len(cube[0])-1
 		else: image = self.images
 		
-		# td graph
+		# td graph 
 		image_td = []
 		for ij in range(image):
-			polarImage, ptSettings = polarTransform.convertToPolarImage(cube[0][ij],\
+			polarImage, ptSettings = POLIMA(cube[0][ij],\
 								center=[self.x0, self.y0], initialRadius = self.rad0, \
 								finalRadius = rad, initialAngle = t0, finalAngle = t1)
 			slices = []
@@ -374,7 +374,7 @@ class td:
 			r0 = slider_ra.val
 			image.set_data(data(int(x0),int(y0),int(theta0),int(theta1)))
 			fig.canvas.draw()
-			ax.clear()
+			#ax.clear()
 			plt.draw()
 		
 		# Change sliders
