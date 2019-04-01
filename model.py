@@ -1,3 +1,6 @@
+"""
+  In development
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 from lmfit import Model
@@ -95,12 +98,12 @@ def lamb(r,l,c):
 
 
 XX = np.linspace(0,6955e8,100)
-
-plt.plot(r[1::],lamb(r[1::],1,c=cfit[1::]))
-plt.plot(r[1::],lamb(r[1::],5,c=cfit[1::]))
-plt.plot(r[1::],lamb(r[1::],20,c=cfit[1::]))
-plt.plot(r[1::],lamb(r[1::],50,c=cfit[1::]))
-plt.plot(r[1::],lamb(r[1::],100,c=cfit[1::]))
+XX = r[1::]/6.955e8
+plt.plot(XX,lamb(r[1::],1,c=cfit[1::]))
+plt.plot(XX,lamb(r[1::],5,c=cfit[1::]))
+plt.plot(XX,lamb(r[1::],20,c=cfit[1::]))
+plt.plot(XX,lamb(r[1::],50,c=cfit[1::]))
+plt.plot(XX,lamb(r[1::],100,c=cfit[1::]))
 plt.ylim(0,6e-3)
 plt.show()
 
