@@ -6,7 +6,7 @@
 
 [![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/AngelMartinezC/Local-Helioseismology/master?urlpath=lab)
 
-![Sunquake Image](Images/sunquake.png)
+![Sunquake Image](sunquake.png)
 
 ## Theory of stellar pulsation
 
