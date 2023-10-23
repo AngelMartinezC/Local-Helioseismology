@@ -31,58 +31,52 @@ import time
 from datetime import datetime
 import polarTransform
 # from datetime import datetime
-# import matplotlib.patches as mpatches
-
-
-# class cubo:
-#     def getdata(self, array):
-#         if isinstance(array, (str)):
-#             cube = fits.getdata(array, 0)
-#             return cube, None
-#         elif isinstance(array, (int, float)):
-#             return "Not a valid array"
-#         else:
-#             return NotImplemented
 
 
 class td:
 
     rsun_m = 695.5e6
-    fe = 3
-
     rsun_pix = 1884  # Value for HMI
 
-    def __init__(self, array, x0=148, y0=140, theta0=192, theta1=260,
-                 path=None, radius=None, radius0=0, time1=False,
-                 time0=False, cartesian=None, xticks=10, yticks=6):
+    def __init__(self, array, x0, y0, theta0, theta1, radius0=0, radius=None,
+                 time0=0, time1=None, cartesian=False):
         '''
-        timedistance.td
-        ===============
+        Arc section parameters for the TD plot.
 
-        Python class that calls the initial parameters for the TD plot.
+        Parameters:
+        ----------
 
-        The class functions are tdplot, test, slider, and cbar_slider.
+        array: `str`
+            Specifies the file name from relative path.
 
-            tdplot:
-            =======
+        x0, y0: `float`
+            Arc section projection center in pixels.
 
-            Computes the TD diagram provided the datacube in fits format.
+        theta0, theta1: `float`
+            Start and end angles in degrees of the arc section.
 
-            Example: A datacube `DOPP.fits` has a suspected sunquake in the
-            coordinates x:520 y:210 between two arcsections th0:45deg and
-            th1:72deg, extending out to 150pix in the image. To calculate
-            the TD associated the procedure is:
+        radius: `float`, optional
+            Outer radius of the arc section. If not set, then the radius is
+            calculated to be the minimun distance from (`x0`, `y0`) to one of
+            the sides of the datacube. Radius in pixels.
 
-                >>> from timedistance import td
-                >>> data = td('DOPP.fits', x0=520, y0=210, \
-                >>>     theta0=45, theta1=72, radius=150)
-                >>> data.plot()
+        radius0: `float`, optional
+            Inner radius of the section. If not set, it defaults to 0.
 
-            Additional arguments can be parsed to plot such as
-            norm=True      - To normalize intensity images,
-            intensity=True - To show intensity images
-            magneto=True   - Shows colorbar for magnetograms
-            colorbar=True  - To show colorbar
+        time0, time1: `float`, optional
+            Start and end frames of the datacube. If not set it defaults to
+            the first and last frame of the datacube.
+
+        Example: A datacube `DOPP.fits` has a suspected sunquake in the
+        coordinates (520, 210) between two arcsections (45°, 72°) extending
+        out to 150 pix in the image. To calculate and plot the td, we can do:
+
+        >>> from timedistance import td
+        >>> import matplotlib.pyplot as td 
+        >>> data = td('DOPP.fits', x0=520, y0=210, theta0=45, theta1=72,
+        >>>           radius=150)
+        >>> data.plot()
+        >>> plt.show()
         '''
 
         self.array = array
@@ -95,31 +89,43 @@ class td:
         self.radius = radius
         self.radius0 = radius0
         self.cartesian = cartesian
-        self.xticks = xticks
-        self.yticks = yticks
-        self.path = path
 
     # Function that makes the time-distance plot
 
-    def tdplot(self, colorbar=True, norm=False, cmap='gray',
-               interpolation='sinc', **kwargs):
+    def tdplot(self, colorbar=True, cmap='gray', interpolation='sinc',
+               **kwargs):
+        r'''
+        Calculates the TD diagram from a given location (`x0`, `y0`) in a
+        circular arc enclosed by the angles :math:`\theta_1` and
+        :math:`\theta_2`.
+        '''
 
         self.colorbar = colorbar
-        # self.plot = plot
-        self.norm = norm
-        # self.save = save
-        # self.notime = notime
-        # self.title = title
-        # self.params = params
-        # self.magneto = magneto
-        # self.intensity = intensity
         self.cmap = cmap
 
         # Call the array
-        # cube = cubo().getdata(self.array)
         hdul = fits.open(self.array)
         hdr = hdul[0].header
         data = hdul[0].data
+
+        # Check existence of some keywords
+        t_rec = datetime.now().strftime(r"%Y-%m-%d %H:%M:%S")
+        try:
+            t_rec = hdr['T_REC']
+        except KeyError:
+            print(f'T_REC keyword not found in header. Set to {t_rec}')
+
+        daxis = 1
+        try:
+            daxis = hdr['DAXIS1']
+        except KeyError:
+            print(f'DAXIS1 keyword not found in header. Set to {daxis}')
+
+        daxis3 = 1
+        try:
+            daxis3 = hdr['DAXIS3']
+        except KeyError:
+            print(f'DAXIS3 keyword not found in header. Set to {daxis3}')
 
         s = time.time()
 
@@ -158,30 +164,20 @@ class td:
         else:
             image1 = len(data)-1
 
-        # td graph
+        # td graph. Coordinate conversion and average
         image_td = []
         for ij in range(image0, image1):
             polarImage, ptSettings = polarTransform.convertToPolarImage(
                 data[ij], center=[self.x0, self.y0],
                 initialRadius=self.radius0, finalRadius=rad,
                 initialAngle=t0, finalAngle=t1,
-                radiusSize=rad-self.radius0, order=0,
-                )
+                radiusSize=rad-self.radius0, order=0)
             slices = []
             for i in range(len(polarImage[0, :])):
                 slices.append(np.mean(polarImage[:, i]))
             image_td.append(slices)
         image_td = np.array(image_td)
         e = time.time()
-
-        # Variables for the graph. The final graph will be shown if is
-        # selected the keyword "graph", and will be saved if the keyword
-        # "save" is selected
-        # if params:
-        #     plt.rcParams.update({'font.size': 12})
-        #     plt.subplots_adjust(right=0.96, bottom=0.12, top=0.93, left=0.11)
-        # else:
-        #     pass
 
         plt.xlabel("Distance (Mm)")
         plt.ylabel("Time (min)")
@@ -192,16 +188,6 @@ class td:
         # plt.xticks(pix_PT, pix_Mm)
         plt.yticks(np.arange(0, 240, 40/3), np.arange(0, 180, 10))
 
-        t_rec = datetime.now().strftime(r"%Y-%m-%d %H:%M:%S")
-
-        try:
-            t_rec = hdr['T_REC']
-        except KeyError:
-            print(f'T_REC keyword not found in header. Set to {t_rec}')
-
-        if norm:
-            image_td /= np.max(image_td)
-
         im = plt.imshow(image_td, origin='lower', interpolation=interpolation,
                         aspect='auto', cmap=self.cmap, **kwargs)
         plt.tick_params(direction='out', length=6, width=1.0, colors='k',
@@ -209,51 +195,14 @@ class td:
 
         if self.colorbar:
             plt.colorbar(im, label=r'$\Delta$ V$_{LOS}$ (m/s)')
-        #     if self.intensity:
-        #         plt.colorbar(label=r'$\Delta$ Counts', pad=0.03, aspect=18)
-        #     elif self.magneto:
-        #         plt.colorbar(label=r'$\Delta B_{LOS}$ (Gauss)', pad=0.03, \
-        #                 aspect=18) #, **kwargs)
-        #     else:
-        #         plt.colorbar(label=r'$\Delta V_{LOS}$ (m/s)', pad=0.03, \
-        #                 aspect=18) #, **kwargs)
-        # else:
-        #     pass
 
-        # ----------------------------------------------------------------
         # -- Final of the graph
 
-        # Save the graph
-        # if self.save:
-        #     if self.path is None:
-        #         plt.savefig("Sunquake_x"+str(self.x0)+"_y"+str(self.y0)+\
-        #             "-"+ str(self.theta0)+"_"+str(self.theta1)+\
-        #             "deg.png",format="png") #,dpi=350)
-        #         #plt.savefig("Sunquake_x"+str(self.x0)+"_y"+str(self.y0)+\
-        #         #    "-"+str(self.theta0)+"_"+str(self.theta1)+\
-        #         #    "deg.pdf",format="pdf") #,dpi=350)
-        #     else:
-        #         plt.savefig(self.path+"Sunquake_x"+str(self.x0)+"_y"+\
-        #             str(self.y0)+"-"+str(self.theta0)+"_"+\
-        #             str(self.theta1)+"deg.png",format="png")
-        #         plt.savefig(self.path+"Sunquake_x"+str(self.x0)+"_y"+\
-        #             str(self.y0)+"-"+str(self.theta0)+"_"+\
-        #             str(self.theta1)+"deg.pdf",format="pdf")
-        # else:
-        #     pass
-
         # Show the time spent making the graph
-        # if self.notime == None:
         print(" Time spent: {:0.2f} s".format(e-s))
 
-        # Show the graph
-        # if self.plot:
-        #     plt.show()
-        # else:
-        #     pass
-
         # Return a cartesian version of the set
-        if self.cartesian is None:
+        if self.cartesian:
             pass
         else:
             cartesianImage = ptSettings.convertToCartesianImage(polarImage)
@@ -310,8 +259,7 @@ class td:
 
                 image = td(self.array, x0=X0, y0=Y0, theta0=self.theta0,
                            theta1=self.theta1, time0=self.time0,
-                           time1=self.time1, radius=rad, path=self.path,
-                           radius0=self.radius0)
+                           time1=self.time1, radius=rad, radius0=self.radius0)
 
                 final = image.tdplot(plot=False, colorbar=False, notime=False)
                 plt.title(" ")
@@ -338,8 +286,7 @@ class td:
         def data(x0, y0, t0, t1, radius0):
             image = td(self.array, x0=int(x0), y0=int(y0), theta0=int(t0),
                        theta1=int(t1), radius0=int(radius0),
-                       radius=self.radius, path=self.path,
-                       time0=self.time0, time1=self.time1)
+                       radius=self.radius, time0=self.time0, time1=self.time1)
             im = image.tdplot(plot=False, colorbar=False, params=False,
                               **kwargs)
             return im
@@ -410,7 +357,7 @@ class td:
 
         image = td(self.array, x0=self.x0, y0=self.y0, theta0=self.theta0,
                    theta1=self.theta1, time0=self.time0, time1=self.time1,
-                   radius=self.radius, path=self.path, radius0=self.radius0)
+                   radius=self.radius, radius0=self.radius0)
         # im = np.array(image.tdplot(plot=False, colorbar=False,
         im = np.array(image.tdplot(colorbar=False))
         #                            params=False))
