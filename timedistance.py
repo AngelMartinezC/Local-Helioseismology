@@ -28,59 +28,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 import polarTransform
+import logging
 
 
-def read_cube(array):
-    hdul = fits.open(array)
-    hdr = hdul[0].header
-    data = hdul[0].data
-    print('hello, Cube read')
-    return data, hdr
-
-
-def calc_td(data, hdr, x0, y0, theta0, theta1, radius0, radius, time0, time1):
-    # Convert the angles to radians
-    t0 = theta0*np.pi/180
-    t1 = theta1*np.pi/180
-
-    # To ensure the minimum radius in the plot
-    # This is to set finalRadius in converting to polar coordinates
-    naxis1 = hdr['NAXIS1']
-    naxis2 = hdr['NAXIS2']
-    if radius is None:
-        mx = naxis1/2
-        my = naxis2/2
-        if (x0 <= mx) and (y0 <= my):
-            rad = min(x0, y0)
-        elif (y0 > my) and (x0 <= mx):
-            rad = min(x0, my*2 - y0)
-        elif (x0 > mx) and (y0 <= my):
-            rad = min(y0, mx*2 - x0)
-        elif (x0 > mx) and (y0 > my):
-            rad = min(mx*2 - x0, my*2 - y0)
-    else:
-        rad = radius
-    rad = int(rad)
-
-    image_td = []
-    for ij in range(time0, time1):
-        polarImage, ptSettings = polarTransform.convertToPolarImage(
-            data[ij], center=[x0, y0],
-            initialRadius=radius0, finalRadius=rad,
-            initialAngle=t0, finalAngle=t1,
-            radiusSize=rad-radius0, order=0)
-        slices = []
-        for i in range(len(polarImage[0, :])):
-            slices.append(np.mean(polarImage[:, i]))
-        image_td.append(slices)
-    image_td = np.array(image_td)
-    return image_td, polarImage, ptSettings
-
-
-class td:
+class TimeDistance:
 
     r_sun = 696  # Mm
-    rsun_pix = 1884  # Value for HMI
 
     def __init__(self, array, x0, y0, theta0, theta1, radius0=0, radius=None,
                  time0=0, time1=None, readcube=True):
@@ -148,6 +101,28 @@ class td:
         self.polarImage = polarImage
         self.ptSettings = ptSettings
 
+        # Check existence of some keywords
+        self.t_rec = datetime.now().strftime(r"%Y-%m-%d %H:%M:%S")
+        try:
+            self.t_rec = self.hdr['T_REC']
+        except KeyError:
+            logging.warning('T_REC keyword not found in header.'
+                            f'Set to {self.t_rec}')
+
+        self.daxis = 1
+        try:
+            self.daxis = self.hdr['DAXIS1']
+        except KeyError:
+            logging.warning('DAXIS1 keyword not found in header.'
+                            f'Set to {self.daxis}')
+
+        self.daxis3 = 1
+        try:
+            self.daxis3 = self.hdr['DAXIS3']
+        except KeyError:
+            logging.warning('DAXIS3 keyword not found in header.'
+                            f'Set to {self.daxis3}')
+
     def plot(self, colorbar=True, cmap='gray', interpolation='sinc',
              **kwargs):
         r'''
@@ -159,33 +134,15 @@ class td:
         self.colorbar = colorbar
         self.cmap = cmap
 
-        # Check existence of some keywords
-        t_rec = datetime.now().strftime(r"%Y-%m-%d %H:%M:%S")
-        try:
-            t_rec = self.hdr['T_REC']
-        except KeyError:
-            print(f'T_REC keyword not found in header. Set to {t_rec}')
-
-        daxis = 1
-        try:
-            daxis = self.hdr['DAXIS1']
-        except KeyError:
-            print(f'DAXIS1 keyword not found in header. Set to {daxis}')
-
-        daxis3 = 1
-        try:
-            daxis3 = self.hdr['DAXIS3']
-        except KeyError:
-            print(f'DAXIS3 keyword not found in header. Set to {daxis3}')
-
         plt.gcf()
-        extent = [0, (self.radius-self.radius0)*daxis*td.r_sun, 0,
-                  (self.time1-self.time0)*45/60]
+        extent = [0, (self.radius-self.radius0)*self.daxis*TimeDistance.r_sun,
+                  0, (self.time1-self.time0)*45/60]
         im = plt.imshow(self.image_td, origin='lower', aspect='auto',
                         interpolation=interpolation, cmap=self.cmap,
                         extent=extent, **kwargs)
         plt.tick_params(direction='out', length=6, width=1.0, colors='k',
                         grid_color='yellow', grid_alpha=0.99)
+        plt.title(self.t_rec)
         plt.xlabel("Distance (Mm)")
         plt.ylabel("Time (min)")
 
@@ -217,89 +174,99 @@ class td:
 
     def slider(self, **kwargs):
 
-        # from matplotlib.widgets import Slider
         from matplotlib.widgets import TextBox
 
-        def data_params(x0, y0, t0, t1, radius0):
-            td_im = td(self.array, x0=x0, y0=y0, theta0=t0, theta1=t1,
-                       radius0=radius0, radius=self.radius,
-                       time0=self.time0, time1=self.time1, readcube=False)
-            return td_im.image_td
+        def data_params(x0, y0, t0, t1, radius):
+            td_im = TimeDistance(self.array, x0=x0, y0=y0, theta0=t0,
+                                 theta1=t1, radius0=self.radius0,
+                                 radius=radius, time0=self.time0,
+                                 time1=self.time1, readcube=False)
+            extent = [0, (radius-self.radius0) * self.daxis *
+                      TimeDistance.r_sun, 0, (self.time1-self.time0)*45/60]
+            return td_im.image_td, extent  # , td_im.toCartesian
 
+        if self.radius is None:
+            self.radius = 200
         first_image = data_params(self.x0, self.y0, self.theta0, self.theta1,
-                                  self.radius0)
+                                  self.radius)
 
-        print('\n\n ', self.radius0, self.radius)
-        fig = plt.figure(figsize=(10, 7))
-        ax = plt.subplot(121)
-        # ax = plt.axes([0.25, 0.25, 0.6, 0.6])
-        global im_plot
-        im_plot = ax.imshow(first_image, cmap='gray', origin='lower',
+        fig = plt.figure(figsize=(7, 5))
+        # plt.subplot(111)
+        ax = plt.axes([0.15, 0.30, 0.6, 0.6])
+        im_plot = ax.imshow(first_image[0], cmap='gray', origin='lower',
                             interpolation='spline36', **kwargs)
-        print(first_image.shape)
         plt.rcParams.update({'font.size': 12})
-        # Set up sliders
-        # axt1 = plt.axes([0.10, 0.06, 0.33, 0.04], facecolor='lightcyan')
-        # axt0 = plt.axes([0.10, 0.11, 0.33, 0.04], facecolor='pink')
-        # axy0 = plt.axes([0.59, 0.11, 0.33, 0.04], facecolor='lightcyan')
-        # axx0 = plt.axes([0.59, 0.06, 0.33, 0.04], facecolor='pink')
-        # axrd = plt.axes([0.10, 0.89, 0.34, 0.04], facecolor='pink')
+        plt.xlabel("Distance (Mm)")
+        plt.ylabel("Time (min)")
+        ax.set_aspect('auto')
 
-        # slider_t1 = Slider(axt1, r'$\theta _1(^\circ)$', self.theta1-30,
-        #                    self.theta1+30, valinit=self.theta1)
-        # slider_t0 = Slider(axt0, r'$\theta _0(^\circ)$', self.theta0-30,
-        #                    self.theta0+30, valinit=self.theta0)
-        # slider_x0 = Slider(axy0, 'x (pix)', self.x0-30, self.x0+30,
-        #                    valinit=self.x0, dragging=False)
-        # slider_y0 = Slider(axx0, 'y (pix)', self.y0-30, self.y0+30,
-        #                    valinit=self.y0)
-        # slider_r0 = Slider(axrd, 'radio', 0, 50, valinit=self.radius0)
+        axx0 = plt.axes([0.15, 0.11, 0.10, 0.04], facecolor='pink')
+        axy0 = plt.axes([0.15, 0.06, 0.10, 0.04], facecolor='lightcyan')
+        axt0 = plt.axes([0.35, 0.11, 0.10, 0.04], facecolor='lightcyan')
+        axt1 = plt.axes([0.35, 0.06, 0.10, 0.04], facecolor='pink')
+        axr1 = plt.axes([0.58, 0.06, 0.10, 0.04], facecolor='pink')
+        axmin = plt.axes([0.85, 0.11, 0.10, 0.04], facecolor='pink')
+        axmax = plt.axes([0.85, 0.06, 0.10, 0.04], facecolor='pink')
+        axcb = plt.axes([0.8, 0.30, 0.025, 0.6], facecolor='pink')
+        plt.colorbar(im_plot, cax=axcb, label=r'$\Delta $ v$_{LOS}$ (m/s)')
 
-        # # Update the image
-        # def update(val):
-        #     radius0 = slider_r0.val
-        #     theta0 = slider_t0.val
-        #     theta1 = slider_t1.val
-        #     x0 = slider_x0.val
-        #     y0 = slider_y0.val
-        #     im_plot.set_data(data_params(int(x0), int(y0), int(theta0),
-        #                                  int(theta1), int(radius0)))
-        #     fig.canvas.draw_idle()
-        #     # fig.canvas.draw()
-        #     # plt.clear()
-        #     plt.draw()
+        text_box_x0 = TextBox(axx0, r"$x_0$ (pix)  ", textalignment="center")
+        text_box_y0 = TextBox(axy0, r"$y_0$ (pix)  ", textalignment="center")
+        text_box_t0 = TextBox(axt0, r"$\theta_0$ (°)  ",
+                              textalignment="center")
+        text_box_t1 = TextBox(axt1, r"$\theta_1$ (°)  ",
+                              textalignment="center")
+        text_box_r1 = TextBox(axr1, r"$\rho_1$ (pix)  ",
+                              textalignment="center")
+        text_box_min = TextBox(axmin, r"cbar$_{vmin}$  ",
+                               textalignment="center")
+        text_box_max = TextBox(axmax, r"cbar$_{vmax}$  ",
+                               textalignment="center")
 
-        def submit(expression):
-            theta0 = eval(expression, {'theta0': self.theta0})
-            x0 = eval(expression, {'x0': str(self.y0)})
-            # y0 = eval(expression, {'y0': self.y0})
-            # theta1 = eval(expression, {'t1': self.theta1})
-            print(theta0, x0)
-            print('\n \n \n \n')
-            im_plot.set_data(data_params(x0, self.y0, theta0,
-                                         self.theta1, 0))
+        def submit(val):
+            value = [tb.text for tb in [text_box_x0, text_box_y0,
+                                        text_box_t0, text_box_t1,
+                                        text_box_r1]]
+            if value[0] == '':
+                value[0] = self.x0
+            if value[1] == '':
+                value[1] = self.y0
+            if value[2] == '':
+                value[2] = self.theta0
+            if value[3] == '':
+                value[3] = self.theta1
+            if value[4] == '':
+                value[4] = self.radius
+            func1, ext = data_params(float(value[0]), float(value[1]),
+                                     float(value[2]), float(value[3]),
+                                     float(value[4]))
+            im_plot.set_data(func1)
+            im_plot.set_extent(ext)
             fig.canvas.draw_idle()
-            # ax.relim()
-            # ax.autoscale_view()
-            plt.draw()
 
-        # axbox = fig.add_axes([0.1, 0.05, 0.8, 0.075])
-        axx0 = plt.axes([0.10, 0.11, 0.33, 0.04], facecolor='pink')
-        axy0 = plt.axes([0.10, 0.06, 0.3, 0.04], facecolor='lightcyan')
-        axt0 = plt.axes([0.59, 0.06, 0.33, 0.04], facecolor='pink')
-        axt1 = plt.axes([0.59, 0.11, 0.33, 0.04], facecolor='lightcyan')
-        text_box_x0 = TextBox(axx0, r"$x_0$ ", textalignment="center")
-        text_box_y0 = TextBox(axy0, r"$y_0$ ", textalignment="center")
-        text_box_t0 = TextBox(axt0, r"$\theta_0$ ", textalignment="center")
-        text_box_t1 = TextBox(axt1, r"$\theta_0$ ", textalignment="center")
-        text_box_x0.on_submit(submit)
-        # text_box_y0.on_submit(submit)
-        text_box_t0.on_submit(submit)
-        # text_box_t1.on_submit(submit)
+        def submit_cbar(var):
+            value = [tb.text for tb in [text_box_min, text_box_max]]
+            if value[0] == '':
+                value[0] = np.min(first_image[0])
+            if value[1] == '':
+                value[1] = np.min(first_image[1])
+            im_plot.set_clim(int(value[0]), int(value[1]))
+            fig.canvas.draw_idle()
+
+        for tb in [text_box_x0, text_box_y0, text_box_t0, text_box_t1,
+                   text_box_r1]:
+            tb.on_submit(submit)
+
         text_box_x0.set_val(self.x0)  # Trigger submit with initial string.
-        # text_box_y0.set_val(self.y0)
+        text_box_y0.set_val(self.y0)
         text_box_t0.set_val(self.theta0)
-        # text_box_t1.set_val(self.theta1)
+        text_box_t1.set_val(self.theta1)
+        text_box_r1.set_val(self.radius)
+
+        for tb in [text_box_min, text_box_max]:
+            tb.on_submit(submit_cbar)
+        text_box_min.set_val(int(0.5*np.min(first_image[0])))
+        text_box_max.set_val(int(0.5*np.max(first_image[0])))
 
         plt.show()
         # del im_plot
@@ -320,7 +287,7 @@ class td:
 
         self.x = columns
         self.y = rows
-        fig = plt.figure(figsize=(18, 12))
+        fig = plt.figure(figsize=(12, 10))
         fig.subplots_adjust(bottom=0.07, left=0.10, right=0.96, top=0.95,
                             wspace=0.05, hspace=0.05)
         n = 0
@@ -334,11 +301,13 @@ class td:
                 X0 = self.x0-int(self.x/2)+i
                 rad = self.radius
 
-                image = td(self.array, x0=X0, y0=Y0, theta0=self.theta0,
-                           theta1=self.theta1, time0=self.time0,
-                           time1=self.time1, radius=rad, radius0=self.radius0)
+                image = TimeDistance(self.array, x0=X0, y0=Y0,
+                                     theta0=self.theta0, theta1=self.theta1,
+                                     time0=self.time0, time1=self.time1,
+                                     radius=rad, radius0=self.radius0,
+                                     readcube=False)
 
-                final = image.tdplot(plot=False, colorbar=False, notime=False)
+                final = image.plot(colorbar=False)
                 plt.title(" ")
                 plt.xlabel(" ")
                 plt.ylabel(" ")
@@ -357,12 +326,12 @@ class td:
         ax = fig.add_subplot(111)
         fig.subplots_adjust(left=0.15, bottom=0.25)
 
-        image = td(self.array, x0=self.x0, y0=self.y0, theta0=self.theta0,
-                   theta1=self.theta1, time0=self.time0, time1=self.time1,
-                   radius=self.radius, radius0=self.radius0)
-        # im = np.array(image.tdplot(plot=False, colorbar=False,
-        im = np.array(image.tdplot(colorbar=False))
-        #                            params=False))
+        image = TimeDistance(self.array, x0=self.x0, y0=self.y0,
+                             theta0=self.theta0, theta1=self.theta1,
+                             time0=self.time0, time1=self.time1,
+                             radius=self.radius, radius0=self.radius0,
+                             readcube=False)
+        im = np.array(image.plot(colorbar=False))
 
         im1 = ax.imshow(im, cmap='Greys_r', origin='lower', aspect='auto',
                         interpolation='spline36', **kwargs)
@@ -387,9 +356,56 @@ class td:
         plt.show()
 
 
+def read_cube(array):
+    hdul = fits.open(array)
+    hdr = hdul[0].header
+    data = hdul[0].data
+    print('hello, Cube read')
+    return data, hdr
+
+
+def calc_td(data, hdr, x0, y0, theta0, theta1, radius0, radius, time0, time1):
+    # Convert the angles to radians
+    t0 = theta0*np.pi/180
+    t1 = theta1*np.pi/180
+
+    # To ensure the minimum radius in the plot
+    # This is to set finalRadius in converting to polar coordinates
+    naxis1 = hdr['NAXIS1']
+    naxis2 = hdr['NAXIS2']
+    if radius is None:
+        mx = naxis1/2
+        my = naxis2/2
+        if (x0 <= mx) and (y0 <= my):
+            rad = min(x0, y0)
+        elif (y0 > my) and (x0 <= mx):
+            rad = min(x0, my*2 - y0)
+        elif (x0 > mx) and (y0 <= my):
+            rad = min(y0, mx*2 - x0)
+        elif (x0 > mx) and (y0 > my):
+            rad = min(mx*2 - x0, my*2 - y0)
+    else:
+        rad = radius
+    rad = int(rad)
+
+    image_td = []
+    for ij in range(time0, time1):
+        polarImage, ptSettings = polarTransform.convertToPolarImage(
+            data[ij], center=[x0, y0],
+            initialRadius=radius0, finalRadius=rad,
+            initialAngle=t0, finalAngle=t1,
+            radiusSize=rad-radius0, order=0)
+        slices = []
+        for i in range(len(polarImage[0, :])):
+            slices.append(np.mean(polarImage[:, i]))
+        image_td.append(slices)
+    image_td = np.array(image_td)
+    return image_td, polarImage, ptSettings
+
+
 if __name__ == "__main__":
 
-    from timedistance import td
+    from timedistance import TimeDistance as td
     import os
 
     os.system('clear')
@@ -411,68 +427,13 @@ if __name__ == "__main__":
               radius=rad1, time0=time0, time1=time1)
 
     # plt.figure()
-    # plt.subplot(121)
+    # plt.subplot(111)
     # image = data.plot(colorbar=True, vmin=-300, vmax=300,
     #                   interpolation='sinc')
-    #
+    # image_cart = data.toCartesian
     # plt.show()
-    # exit()
-    image_cart = data.toCartesian
+
     data.slider()
-    plt.show()
-    exit()
 
-    print('End')
-    # #  Initial parameters
-    # # name = 'hmi_data/DOPP_20110730-M9_3-DIFF.fits'  # Name of datacube
-    # name = './DOPP_DIFF.fits'  # Name of datacube
-    # x0 = 503  # x-center
-    # y0 = 512  # y-center
-    # th0 = 194  # Initial angle
-    # th1 = 258  # End angle
-
-    # rad0 = 0  # Skip these pixels in the TD plot
-    # rad1 = 200  # Final radius (distance) in pixels
-
-    # time0 = 100  # Initial frame for calculations
-    # time1 = 200  # Final frame for calculations
-
-    # # Calculates the TD diagram (calls the td class inst with init values)
-    # data = td(name, x0=x0, y0=y0, theta0=th0, theta1=th1, radius0=rad0,
-    #           radius=rad1, time0=time0, time1=time1)
-
-    # fig = plt.figure(figsize=(12, 5))
-    # plt.subplots_adjust(wspace=0.2, left=0.1, right=0.95)
-
-    # plt.subplot(121)
-    # image = data.tdplot(colorbar=False, vmin=-300, vmax=300,
-    #                     interpolation='sinc')
-
-    # plt.subplot(122)
-    # angle1, rho1, time1, ampl1 = np.loadtxt(
-    #     './../../../test_bc_filter/td/OUT', unpack=True)
-    # r_sun = 696  # Mm
-    # frame0 = 30
-    # image = data.tdplot(colorbar=False, vmin=-300, vmax=300,
-    #                     interpolation='sinc')
-    # # print(im)
-    # plt.ylabel(' ')
-    # plt.plot(rho1*r_sun, (time1 + frame0*45)/60)
-    # plt.xlim(0, image.shape[1]*0.0005*r_sun)
-    # plt.ylim(0, image.shape[0]*45/60)
-    # # cb_ax = fig.add_axes([0.83, 0.1, 0.02, 0.8])
-    # # cbar = fig.colorbar(im, cax=cb_ax)
-    # plt.show()
-
-    # plt.show()
-    # exit()
-    # Plots the TD diagram
-
-    # Slider to change the colorbar limits (improve contrast)
     # data.cbar_slider()
-
-    # Interactive slides to best fit the TD
-    # data.slider()
-
-    # Plot many around
-    # data.test(rows=3,columns=5)
+    # data.test()
