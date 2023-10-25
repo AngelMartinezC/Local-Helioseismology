@@ -26,20 +26,64 @@
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
-# import scipy.io as sp
-import time
 from datetime import datetime
 import polarTransform
-# from datetime import datetime
+
+
+def read_cube(array):
+    hdul = fits.open(array)
+    hdr = hdul[0].header
+    data = hdul[0].data
+    print('hello, Cube read')
+    return data, hdr
+
+
+def calc_td(data, hdr, x0, y0, theta0, theta1, radius0, radius, time0, time1):
+    # Convert the angles to radians
+    t0 = theta0*np.pi/180
+    t1 = theta1*np.pi/180
+
+    # To ensure the minimum radius in the plot
+    # This is to set finalRadius in converting to polar coordinates
+    naxis1 = hdr['NAXIS1']
+    naxis2 = hdr['NAXIS2']
+    if radius is None:
+        mx = naxis1/2
+        my = naxis2/2
+        if (x0 <= mx) and (y0 <= my):
+            rad = min(x0, y0)
+        elif (y0 > my) and (x0 <= mx):
+            rad = min(x0, my*2 - y0)
+        elif (x0 > mx) and (y0 <= my):
+            rad = min(y0, mx*2 - x0)
+        elif (x0 > mx) and (y0 > my):
+            rad = min(mx*2 - x0, my*2 - y0)
+    else:
+        rad = radius
+    rad = int(rad)
+
+    image_td = []
+    for ij in range(time0, time1):
+        polarImage, ptSettings = polarTransform.convertToPolarImage(
+            data[ij], center=[x0, y0],
+            initialRadius=radius0, finalRadius=rad,
+            initialAngle=t0, finalAngle=t1,
+            radiusSize=rad-radius0, order=0)
+        slices = []
+        for i in range(len(polarImage[0, :])):
+            slices.append(np.mean(polarImage[:, i]))
+        image_td.append(slices)
+    image_td = np.array(image_td)
+    return image_td, polarImage, ptSettings
 
 
 class td:
 
-    rsun_m = 695.5e6
+    r_sun = 696  # Mm
     rsun_pix = 1884  # Value for HMI
 
     def __init__(self, array, x0, y0, theta0, theta1, radius0=0, radius=None,
-                 time0=0, time1=None, cartesian=False):
+                 time0=0, time1=None):
         '''
         Arc section parameters for the TD plot.
 
@@ -72,7 +116,7 @@ class td:
         out to 150 pix in the image. To calculate and plot the td, we can do:
 
         >>> from timedistance import td
-        >>> import matplotlib.pyplot as td 
+        >>> import matplotlib.pyplot as td
         >>> data = td('DOPP.fits', x0=520, y0=210, theta0=45, theta1=72,
         >>>           radius=150)
         >>> data.plot()
@@ -88,12 +132,21 @@ class td:
         self.theta1 = theta1
         self.radius = radius
         self.radius0 = radius0
-        self.cartesian = cartesian
 
-    # Function that makes the time-distance plot
+        data, hdr = read_cube(array)
+        if time1 is None:
+            time1 = data.shape[0]
+        self.data = data
+        self.hdr = hdr
+        image_td, polarImage, ptSettings = calc_td(data, hdr, x0, y0, theta0,
+                                                   theta1, radius0, radius,
+                                                   time0, time1)
+        self.image_td = image_td
+        self.polarImage = polarImage
+        self.ptSettings = ptSettings
 
-    def tdplot(self, colorbar=True, cmap='gray', interpolation='sinc',
-               **kwargs):
+    def plot(self, colorbar=True, cmap='gray', interpolation='sinc',
+             **kwargs):
         r'''
         Calculates the TD diagram from a given location (`x0`, `y0`) in a
         circular arc enclosed by the angles :math:`\theta_1` and
@@ -103,113 +156,46 @@ class td:
         self.colorbar = colorbar
         self.cmap = cmap
 
-        # Call the array
-        hdul = fits.open(self.array)
-        hdr = hdul[0].header
-        data = hdul[0].data
-
         # Check existence of some keywords
         t_rec = datetime.now().strftime(r"%Y-%m-%d %H:%M:%S")
         try:
-            t_rec = hdr['T_REC']
+            t_rec = self.hdr['T_REC']
         except KeyError:
             print(f'T_REC keyword not found in header. Set to {t_rec}')
 
         daxis = 1
         try:
-            daxis = hdr['DAXIS1']
+            daxis = self.hdr['DAXIS1']
         except KeyError:
             print(f'DAXIS1 keyword not found in header. Set to {daxis}')
 
         daxis3 = 1
         try:
-            daxis3 = hdr['DAXIS3']
+            daxis3 = self.hdr['DAXIS3']
         except KeyError:
             print(f'DAXIS3 keyword not found in header. Set to {daxis3}')
 
-        s = time.time()
-
-        # Convert the angles to radians
-        t0 = self.theta0*np.pi/180
-        t1 = self.theta1*np.pi/180
-
-        # To ensure the minimum radius in the plot
-        # This is to set finalRadius in converting to polar coordinates
-        naxis1 = hdr['NAXIS1']
-        naxis2 = hdr['NAXIS2']
-        if self.radius is None:
-            mx = naxis1/2
-            my = naxis2/2
-            if (self.x0 <= mx) and (self.y0 <= my):
-                rad = min(self.x0, self.y0)
-            elif (self.y0 > my) and (self.x0 <= mx):
-                rad = min(self.x0, my*2 - self.y0)
-            elif (self.x0 > mx) and (self.y0 <= my):
-                rad = min(self.y0, mx*2 - self.x0)
-            elif (self.x0 > mx) and (self.y0 > my):
-                rad = min(mx*2 - self.x0, my*2 - self.y0)
-        else:
-            rad = self.radius
-        rad = int(rad)
-
-        # First frame of the TD plot
-        if self.time0:
-            image0 = self.time0
-        else:
-            image0 = 0
-
-        # Last frame of the plot. The plot range will be time1 - time0
-        if self.time1:
-            image1 = self.time1
-        else:
-            image1 = len(data)-1
-
-        # td graph. Coordinate conversion and average
-        image_td = []
-        for ij in range(image0, image1):
-            polarImage, ptSettings = polarTransform.convertToPolarImage(
-                data[ij], center=[self.x0, self.y0],
-                initialRadius=self.radius0, finalRadius=rad,
-                initialAngle=t0, finalAngle=t1,
-                radiusSize=rad-self.radius0, order=0)
-            slices = []
-            for i in range(len(polarImage[0, :])):
-                slices.append(np.mean(polarImage[:, i]))
-            image_td.append(slices)
-        image_td = np.array(image_td)
-        e = time.time()
-
         plt.xlabel("Distance (Mm)")
         plt.ylabel("Time (min)")
-        # Every 4 pixels in PT correstpond to 1 pix in Postel
-        # rad_Pos = rad*335/240  # Here I convert from postel pix to PT
-        # pix_PT = np.arange(0, rad_Pos, self.xticks*4)
-        # pix_Mm = np.arange(0, rad_Pos/4, self.xticks, dtype=int)
-        # plt.xticks(pix_PT, pix_Mm)
-        plt.yticks(np.arange(0, 240, 40/3), np.arange(0, 180, 10))
+        extent = [0, (self.radius-self.radius0)*daxis*td.r_sun, 0,
+                  (self.time1-self.time0)*45/60]
 
-        im = plt.imshow(image_td, origin='lower', interpolation=interpolation,
-                        aspect='auto', cmap=self.cmap, **kwargs)
+        im = plt.imshow(self.image_td, origin='lower', aspect='auto',
+                        interpolation=interpolation, cmap=self.cmap,
+                        extent=extent, **kwargs)
         plt.tick_params(direction='out', length=6, width=1.0, colors='k',
                         grid_color='yellow', grid_alpha=0.99)
 
         if self.colorbar:
             plt.colorbar(im, label=r'$\Delta$ V$_{LOS}$ (m/s)')
 
-        # -- Final of the graph
+        return self.image_td
 
-        # Show the time spent making the graph
-        print(" Time spent: {:0.2f} s".format(e-s))
-
-        # Return a cartesian version of the set
-        if self.cartesian:
-            pass
-        else:
-            cartesianImage = ptSettings.convertToCartesianImage(polarImage)
-            return cartesianImage
-
-        # At the end the function returns the array of the time-distance plot
-        return image_td
+    @property
+    def toCartesian(self):
+        cartesianImage = self.ptSettings.convertToCartesianImage(
+            self.polarImage)
+        return cartesianImage
 
     """
         The next functions ar not required to show the td plot.
@@ -240,7 +226,6 @@ class td:
           - rows `int`: Number of rows
         '''
 
-        s = time.time()
         self.x = columns
         self.y = rows
         fig = plt.figure(figsize=(18, 12))
@@ -270,8 +255,6 @@ class td:
                 ax.text(0.45, 0.1, f"x={X0}\ny={Y0}", transform=ax.transAxes,
                         bbox=dict(boxstyle="round", ec='k',
                                   fc=(1, 1, 1, 0.6)))
-        e = time.time()
-        print("\n Time spent in test: {:0.2f} s".format(e-s))
         plt.show()
 
     def slider(self, **kwargs):
@@ -390,26 +373,42 @@ if __name__ == "__main__":
     #  Initial parameters
     # name = 'hmi_data/DOPP_20110730-M9_3-DIFF.fits'  # Name of datacube
     name = './DOPP_DIFF.fits'  # Name of datacube
-    x0 = 503   # x-center
-    y0 = 512   # y-center
-    th0 = 194    # Initial angle
-    th1 = 258   # End angle
+    x0 = 503  # x-center
+    y0 = 512  # y-center
+    th0 = 194  # Initial angle
+    th1 = 258  # End angle
 
-    rad0 = 0   # Skip these pixels in the TD plot
+    rad0 = 0  # Skip these pixels in the TD plot
     rad1 = 200  # Final radius (distance) in pixels
 
-    time0 = 100   # Initial frame for calculations
+    time0 = 100  # Initial frame for calculations
     time1 = 200  # Final frame for calculations
 
     # Calculates the TD diagram (calls the td class instance with init values)
     data = td(name, x0=x0, y0=y0, theta0=th0, theta1=th1, radius0=rad0,
               radius=rad1, time0=time0, time1=time1)
 
-    plt.figure()
-    plt.subplot(111)
-    image = data.tdplot(colorbar=True, vmin=-510, vmax=510,
+    fig = plt.figure(figsize=(12, 5))
+    plt.subplots_adjust(wspace=0.2, left=0.1, right=0.95)
+
+    plt.subplot(121)
+    image = data.tdplot(colorbar=False, vmin=-300, vmax=300,
                         interpolation='sinc')
-    print(image.shape)
+
+    plt.subplot(122)
+    angle1, rho1, time1, ampl1 = np.loadtxt('./../../../test_bc_filter/td/OUT',
+                                            unpack=True)
+    r_sun = 696  # Mm
+    frame0 = 30
+    image = data.tdplot(colorbar=False, vmin=-300, vmax=300,
+                        interpolation='sinc')
+    # print(im)
+    plt.ylabel(' ')
+    plt.plot(rho1*r_sun, (time1 + frame0*45)/60)
+    plt.xlim(0, image.shape[1]*0.0005*r_sun)
+    plt.ylim(0, image.shape[0]*45/60)
+    # cb_ax = fig.add_axes([0.83, 0.1, 0.02, 0.8])
+    # cbar = fig.colorbar(im, cax=cb_ax)
     plt.show()
 
     # plt.show()
